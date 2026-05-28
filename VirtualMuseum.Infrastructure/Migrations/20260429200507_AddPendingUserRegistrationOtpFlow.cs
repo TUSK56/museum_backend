@@ -11,28 +11,6 @@ namespace VirtualMuseum.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AlterColumn<decimal>(
-                name: "Longitude",
-                table: "DiscoveryLocations",
-                type: "numeric(18,6)",
-                precision: 18,
-                scale: 6,
-                nullable: true,
-                oldClrType: typeof(decimal),
-                oldType: "numeric(18,2)",
-                oldNullable: true);
-
-            migrationBuilder.AlterColumn<decimal>(
-                name: "Latitude",
-                table: "DiscoveryLocations",
-                type: "numeric(18,6)",
-                precision: 18,
-                scale: 6,
-                nullable: true,
-                oldClrType: typeof(decimal),
-                oldType: "numeric(18,2)",
-                oldNullable: true);
-
             migrationBuilder.CreateTable(
                 name: "PendingUserRegistrations",
                 columns: table => new
@@ -64,28 +42,6 @@ namespace VirtualMuseum.Infrastructure.Migrations
         {
             migrationBuilder.DropTable(
                 name: "PendingUserRegistrations");
-
-            migrationBuilder.AlterColumn<decimal>(
-                name: "Longitude",
-                table: "DiscoveryLocations",
-                type: "numeric(18,2)",
-                nullable: true,
-                oldClrType: typeof(decimal),
-                oldType: "numeric(18,6)",
-                oldPrecision: 18,
-                oldScale: 6,
-                oldNullable: true);
-
-            migrationBuilder.AlterColumn<decimal>(
-                name: "Latitude",
-                table: "DiscoveryLocations",
-                type: "numeric(18,2)",
-                nullable: true,
-                oldClrType: typeof(decimal),
-                oldType: "numeric(18,6)",
-                oldPrecision: 18,
-                oldScale: 6,
-                oldNullable: true);
         }
     }
 }

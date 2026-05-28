@@ -29,8 +29,8 @@ namespace VirtualMuseum.Infrastructure.Migrations
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     Name = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: false),
-                    Latitude = table.Column<decimal>(type: "numeric(18,2)", nullable: true),
-                    Longitude = table.Column<decimal>(type: "numeric(18,2)", nullable: true)
+                    Latitude = table.Column<decimal>(type: "numeric(18,6)", precision: 18, scale: 6, nullable: true),
+                    Longitude = table.Column<decimal>(type: "numeric(18,6)", precision: 18, scale: 6, nullable: true)
                 },
                 constraints: table =>
                 {
