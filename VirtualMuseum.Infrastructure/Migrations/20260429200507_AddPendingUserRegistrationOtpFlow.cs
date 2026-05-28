@@ -19,7 +19,7 @@ namespace VirtualMuseum.Infrastructure.Migrations
                 scale: 6,
                 nullable: true,
                 oldClrType: typeof(decimal),
-                oldtype: "numeric(18,2)",
+                oldType: "numeric(18,2)",
                 oldNullable: true);
 
             migrationBuilder.AlterColumn<decimal>(
@@ -30,7 +30,7 @@ namespace VirtualMuseum.Infrastructure.Migrations
                 scale: 6,
                 nullable: true,
                 oldClrType: typeof(decimal),
-                oldtype: "numeric(18,2)",
+                oldType: "numeric(18,2)",
                 oldNullable: true);
 
             migrationBuilder.CreateTable(
@@ -71,7 +71,7 @@ namespace VirtualMuseum.Infrastructure.Migrations
                 type: "numeric(18,2)",
                 nullable: true,
                 oldClrType: typeof(decimal),
-                oldtype: "numeric(18,6)",
+                oldType: "numeric(18,6)",
                 oldPrecision: 18,
                 oldScale: 6,
                 oldNullable: true);
@@ -82,7 +82,7 @@ namespace VirtualMuseum.Infrastructure.Migrations
                 type: "numeric(18,2)",
                 nullable: true,
                 oldClrType: typeof(decimal),
-                oldtype: "numeric(18,6)",
+                oldType: "numeric(18,6)",
                 oldPrecision: 18,
                 oldScale: 6,
                 oldNullable: true);
