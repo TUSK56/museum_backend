@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using VirtualMuseum.API.Middleware;
@@ -24,11 +23,15 @@ if (!string.IsNullOrWhiteSpace(port))
 }
 
 // Database - Scoped lifetime (default for AddDbContext)
-var connectionString = ResolveConnectionString(builder.Configuration);
+var connectionString = DatabaseConnectionResolver.Resolve(builder.Configuration);
 
 builder.Services.AddDbContext<MuseumDbContext>(options =>
 {
-    options.UseNpgsql(connectionString);
+    options.UseNpgsql(connectionString, npgsql =>
+    {
+        npgsql.EnableRetryOnFailure(5, TimeSpan.FromSeconds(5), null);
+        npgsql.MigrationsAssembly(typeof(MuseumDbContext).Assembly.FullName);
+    });
 });
 
 var dataProtectionKeyPath = builder.Configuration["DataProtection:KeyPath"];
@@ -149,6 +152,7 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 var app = builder.Build();
+app.Logger.LogInformation("PostgreSQL target: {DatabaseHost}", DatabaseConnectionResolver.DescribeHost(connectionString));
 var enableSwagger =
     builder.Configuration.GetValue<bool?>("Swagger:Enabled")
     ?? true;
@@ -190,14 +194,15 @@ if (runMigrationsOnStartup)
                 startupLogger.LogInformation("Database migrations and seeding completed successfully.");
                 break;
             }
-            catch (Exception) when (attempt < maxRetries)
+            catch (Exception ex) when (attempt < maxRetries)
             {
+                startupLogger.LogWarning(ex, "Database migration attempt {Attempt} failed, retrying in 5s...", attempt);
                 await Task.Delay(TimeSpan.FromSeconds(5));
             }
-            catch
+            catch (Exception ex)
             {
-                startupLogger.LogError("Database migration failed after retries. Verify PostgreSQL is reachable and ConnectionStrings:DefaultConnection or DATABASE_URL is set.");
-                throw new InvalidOperationException("Unable to initialize database.");
+                startupLogger.LogError(ex, "Database migration failed after {MaxRetries} attempts.", maxRetries);
+                throw new InvalidOperationException("Unable to initialize database. See logs for details.", ex);
             }
         }
     }
@@ -212,58 +217,7 @@ else
     app.Logger.LogInformation("Skipping database migration on startup. Set Database:RunMigrationsOnStartup=true to enable.");
 }
 
-static string ResolveConnectionString(IConfiguration configuration)
-{
-    var databaseUrl =
-        Environment.GetEnvironmentVariable("DATABASE_PRIVATE_URL")
-        ?? Environment.GetEnvironmentVariable("DATABASE_URL");
-    if (!string.IsNullOrWhiteSpace(databaseUrl))
-    {
-        return ConvertDatabaseUrlToNpgsql(databaseUrl);
-    }
-
-    var connectionString = configuration.GetConnectionString("DefaultConnection");
-    if (string.IsNullOrWhiteSpace(connectionString))
-    {
-        throw new InvalidOperationException(
-            "Connection string 'DefaultConnection' is not configured. Set ConnectionStrings__DefaultConnection or DATABASE_URL.");
-    }
-
-    if (connectionString.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase)
-        || connectionString.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
-    {
-        return ConvertDatabaseUrlToNpgsql(connectionString);
-    }
-
-    return connectionString;
-}
-
-static string ConvertDatabaseUrlToNpgsql(string databaseUrl)
-{
-    var uri = new Uri(databaseUrl);
-    if (uri.Scheme is not ("postgres" or "postgresql"))
-    {
-        throw new InvalidOperationException($"Unsupported DATABASE_URL scheme '{uri.Scheme}'. Expected postgres or postgresql.");
-    }
-
-    var userInfo = uri.UserInfo.Split(':', 2);
-    var username = Uri.UnescapeDataString(userInfo[0]);
-    var password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : string.Empty;
-    var database = uri.AbsolutePath.TrimStart('/');
-    var builder = new NpgsqlConnectionStringBuilder
-    {
-        Host = uri.Host,
-        Port = uri.Port > 0 ? uri.Port : 5432,
-        Database = string.IsNullOrWhiteSpace(database) ? "railway" : database,
-        Username = username,
-        Password = password,
-        SslMode = SslMode.Require
-    };
-
-    return builder.ConnectionString;
-}
-
-// Lightweight probe for Railway healthchecks (no database required).
+// Lightweight probe (no database).
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 if (enableSwagger)

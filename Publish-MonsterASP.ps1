@@ -31,6 +31,26 @@ else {
 # Production settings for MonsterASP + Railway Postgres
 Copy-Item -Force "VirtualMuseum.API\appsettings.Production.json" "$OutputDir\appsettings.Production.json"
 Copy-Item -Force "VirtualMuseum.API\web.config" "$OutputDir\web.config"
+if (-not (Test-Path "VirtualMuseum.API\appsettings.Production.json")) {
+    Write-Warning "Missing VirtualMuseum.API\appsettings.Production.json — copy appsettings.Production.example.json and set your Railway connection string."
+}
+if (Test-Path "VirtualMuseum.API\appsettings.Production.json") {
+    $prod = Get-Content "VirtualMuseum.API\appsettings.Production.json" -Raw | ConvertFrom-Json
+    $conn = $prod.ConnectionStrings.DefaultConnection
+    if ($conn) {
+        $webConfigPath = Join-Path $OutputDir "web.config"
+        [xml]$xml = Get-Content $webConfigPath
+        $envVars = $xml.configuration.location.'system.webServer'.aspNetCore.environmentVariables
+        $node = $envVars.environmentVariable | Where-Object { $_.name -eq 'ConnectionStrings__DefaultConnection' }
+        if ($node) { $node.value = $conn } else {
+            $newVar = $xml.CreateElement('environmentVariable')
+            $newVar.SetAttribute('name', 'ConnectionStrings__DefaultConnection')
+            $newVar.SetAttribute('value', $conn)
+            $envVars.AppendChild($newVar) | Out-Null
+        }
+        $xml.Save($webConfigPath)
+    }
+}
 
 # MonsterASP runs Production by default on many plans; merge Production connection into appsettings.json for hosts that ignore ASPNETCORE_ENVIRONMENT.
 $appsettingsPath = Join-Path $OutputDir "appsettings.json"
