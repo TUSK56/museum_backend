@@ -4,6 +4,6 @@ dockerfilePath = "VirtualMuseum.API/Dockerfile"
 
 [deploy]
 startCommand = "dotnet VirtualMuseum.API.dll"
-healthcheckPath = "/api/app-status"
-healthcheckTimeout = 120
+healthcheckPath = "/health"
+healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"

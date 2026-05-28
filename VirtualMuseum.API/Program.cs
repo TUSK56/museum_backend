@@ -16,6 +16,13 @@ using VirtualMuseum.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Railway (and similar platforms) inject PORT; must listen on 0.0.0.0, not a fixed 8080.
+var port = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrWhiteSpace(port))
+{
+    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+}
+
 // Database - Scoped lifetime (default for AddDbContext)
 var connectionString = ResolveConnectionString(builder.Configuration);
 
@@ -207,7 +214,9 @@ else
 
 static string ResolveConnectionString(IConfiguration configuration)
 {
-    var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+    var databaseUrl =
+        Environment.GetEnvironmentVariable("DATABASE_PRIVATE_URL")
+        ?? Environment.GetEnvironmentVariable("DATABASE_URL");
     if (!string.IsNullOrWhiteSpace(databaseUrl))
     {
         return ConvertDatabaseUrlToNpgsql(databaseUrl);
@@ -242,11 +251,14 @@ static string ConvertDatabaseUrlToNpgsql(string databaseUrl)
         Database = string.IsNullOrWhiteSpace(database) ? "railway" : database,
         Username = username,
         Password = password,
-        SslMode = SslMode.Prefer
+        SslMode = SslMode.Require
     };
 
     return builder.ConnectionString;
 }
+
+// Lightweight probe for Railway healthchecks (no database required).
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 if (enableSwagger)
 {
@@ -257,12 +269,17 @@ if (enableSwagger)
         c.SwaggerEndpoint("v1/swagger.json", "3D Virtual Museum API v1");
     });
 }
-if (!app.Environment.IsDevelopment())
+// Railway terminates TLS at the edge; redirecting HTTP healthchecks to HTTPS breaks probes.
+var behindProxy = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("PORT"));
+if (!app.Environment.IsDevelopment() && !behindProxy)
 {
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+if (!behindProxy)
+{
+    app.UseHttpsRedirection();
+}
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
