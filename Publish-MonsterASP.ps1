@@ -29,10 +29,11 @@ else {
 }
 
 # Production settings for MonsterASP + Railway Postgres
-Copy-Item -Force "VirtualMuseum.API\appsettings.Production.json" "$OutputDir\appsettings.Production.json"
 Copy-Item -Force "VirtualMuseum.API\web.config" "$OutputDir\web.config"
 if (-not (Test-Path "VirtualMuseum.API\appsettings.Production.json")) {
-    Write-Warning "Missing VirtualMuseum.API\appsettings.Production.json — copy appsettings.Production.example.json and set your Railway connection string."
+    Write-Warning "Missing VirtualMuseum.API\appsettings.Production.json - copy appsettings.Production.example.json and set your Railway connection string."
+} else {
+    Copy-Item -Force "VirtualMuseum.API\appsettings.Production.json" "$OutputDir\appsettings.Production.json"
 }
 if (Test-Path "VirtualMuseum.API\appsettings.Production.json") {
     $prod = Get-Content "VirtualMuseum.API\appsettings.Production.json" -Raw | ConvertFrom-Json
