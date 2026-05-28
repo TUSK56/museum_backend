@@ -229,6 +229,12 @@ static string ResolveConnectionString(IConfiguration configuration)
             "Connection string 'DefaultConnection' is not configured. Set ConnectionStrings__DefaultConnection or DATABASE_URL.");
     }
 
+    if (connectionString.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase)
+        || connectionString.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
+    {
+        return ConvertDatabaseUrlToNpgsql(connectionString);
+    }
+
     return connectionString;
 }
 

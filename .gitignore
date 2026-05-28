@@ -28,6 +28,8 @@ publish/
 .env
 .env.*
 !.env.example
+**/appsettings.Production.json
+publish/
 
 # Data protection keys (runtime)
 **/App_Data/
