@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="VirtualMuseum.API/VirtualMuseum.API.csproj" />
+  <Project Path="VirtualMuseum.Application/VirtualMuseum.Application.csproj" />
+  <Project Path="VirtualMuseum.Domain/VirtualMuseum.Domain.csproj" />
+  <Project Path="VirtualMuseum.Infrastructure/VirtualMuseum.Infrastructure.csproj" />
+  <Project Path="VirtualMuseum.IntegrationTests/VirtualMuseum.IntegrationTests.csproj" />
+</Solution>

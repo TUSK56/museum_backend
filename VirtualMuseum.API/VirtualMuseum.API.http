@@ -1,0 +1,6 @@
+@VirtualMuseum.API_HostAddress = https://egymuseum.runasp.net
+
+GET {{VirtualMuseum.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
