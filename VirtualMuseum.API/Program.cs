@@ -27,8 +27,15 @@ var connectionString = DatabaseConnectionResolver.Resolve(builder.Configuration)
 if (DatabaseConnectionResolver.IsHeroku && DatabaseConnectionResolver.IsLocalHost(connectionString))
 {
     throw new InvalidOperationException(
-        "Heroku: no cloud database configured. Add Heroku Postgres (heroku addons:create heroku-postgresql:essential-0) " +
-        "or set DATABASE_URL / ConnectionStrings__DefaultConnection to your PostgreSQL instance.");
+        "Heroku: no cloud database configured. From Railway → Postgres → Variables, copy DATABASE_PUBLIC_URL and run: " +
+        "heroku config:set DATABASE_URL=\"<paste DATABASE_PUBLIC_URL>\" -a YOUR_APP_NAME");
+}
+
+if (DatabaseConnectionResolver.IsHeroku && DatabaseConnectionResolver.IsRailwayInternalHost(connectionString))
+{
+    throw new InvalidOperationException(
+        "Heroku cannot use Railway's internal host (postgres.railway.internal). " +
+        "Set DATABASE_URL to DATABASE_PUBLIC_URL from Railway (host ends with .proxy.rlwy.net).");
 }
 
 builder.Services.AddDbContext<MuseumDbContext>(options =>

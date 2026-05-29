@@ -293,11 +293,15 @@ VirtualMuseum Back-End/
    heroku addons:create heroku-postgresql:essential-0 -a YOUR_APP_NAME
    ```
 
-2. Or point at external Postgres (e.g. Railway):
+2. **Railway Postgres + Heroku API** (recommended if DB is on Railway):
+
+   In Railway → your **Postgres** service → **Variables**, copy **`DATABASE_PUBLIC_URL`** (host like `*.proxy.rlwy.net`, **not** `postgres.railway.internal`).
 
    ```bash
-   heroku config:set ConnectionStrings__DefaultConnection="Host=...;Port=...;Database=...;Username=...;Password=...;SSL Mode=Require;Trust Server Certificate=true" -a YOUR_APP_NAME
+   heroku config:set DATABASE_URL="postgresql://postgres:YOUR_PASSWORD@YOUR_HOST.proxy.rlwy.net:YOUR_PORT/railway" -a YOUR_APP_NAME
    ```
+
+   Paste the full `DATABASE_PUBLIC_URL` value from Railway. On startup the API runs EF migrations and creates/updates tables automatically (`Database:RunMigrationsOnStartup` is enabled).
 
 3. Optional JWT override:
 

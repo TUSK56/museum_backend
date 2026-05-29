@@ -7,11 +7,7 @@ public static class DatabaseConnectionResolver
 {
     public static string Resolve(IConfiguration configuration)
     {
-        var databaseUrl =
-            Environment.GetEnvironmentVariable("DATABASE_PRIVATE_URL")
-            ?? Environment.GetEnvironmentVariable("DATABASE_URL")
-            ?? configuration["DATABASE_URL"]
-            ?? configuration["DATABASE_PRIVATE_URL"];
+        var databaseUrl = ResolveDatabaseUrl(configuration);
 
         string raw;
         if (!string.IsNullOrWhiteSpace(databaseUrl))
@@ -22,7 +18,8 @@ public static class DatabaseConnectionResolver
         {
             raw = configuration.GetConnectionString("DefaultConnection")
                 ?? throw new InvalidOperationException(
-                    "Database is not configured. Set ConnectionStrings:DefaultConnection, DATABASE_URL, or ConnectionStrings__DefaultConnection in web.config / environment.");
+                    "Database is not configured. Set DATABASE_URL, DATABASE_PUBLIC_URL (Railway on Heroku), " +
+                    "or ConnectionStrings__DefaultConnection.");
         }
 
         if (raw.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase)
@@ -32,6 +29,40 @@ public static class DatabaseConnectionResolver
         }
 
         return Normalize(raw);
+    }
+
+    private static string? ResolveDatabaseUrl(IConfiguration configuration)
+    {
+        // Railway → Heroku: must use DATABASE_PUBLIC_URL (zephyr.proxy.rlwy.net), not postgres.railway.internal.
+        if (IsHeroku)
+        {
+            return FirstNonEmpty(
+                Environment.GetEnvironmentVariable("DATABASE_PUBLIC_URL"),
+                configuration["DATABASE_PUBLIC_URL"],
+                Environment.GetEnvironmentVariable("DATABASE_URL"),
+                configuration["DATABASE_URL"],
+                Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection"),
+                configuration.GetConnectionString("DefaultConnection"));
+        }
+
+        return FirstNonEmpty(
+            Environment.GetEnvironmentVariable("DATABASE_PRIVATE_URL"),
+            Environment.GetEnvironmentVariable("DATABASE_PUBLIC_URL"),
+            Environment.GetEnvironmentVariable("DATABASE_URL"),
+            configuration["DATABASE_PRIVATE_URL"],
+            configuration["DATABASE_PUBLIC_URL"],
+            configuration["DATABASE_URL"]);
+    }
+
+    private static string? FirstNonEmpty(params string?[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+                return value;
+        }
+
+        return null;
     }
 
     public static string DescribeHost(string connectionString)
@@ -89,25 +120,55 @@ public static class DatabaseConnectionResolver
         }
     }
 
+    public static bool IsRailwayInternalHost(string connectionString)
+    {
+        try
+        {
+            var host = new NpgsqlConnectionStringBuilder(connectionString).Host;
+            return host?.Contains("railway.internal", StringComparison.OrdinalIgnoreCase) == true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private static string Normalize(string connectionString)
     {
         var source = new NpgsqlConnectionStringBuilder(connectionString);
         var builder = new NpgsqlConnectionStringBuilder(connectionString)
         {
-            // Shorter timeout on cloud so a missing/wrong DB fails before Heroku's boot limit.
             Timeout = RequiresSsl(source.Host) ? 15 : 60,
             CommandTimeout = 120,
             KeepAlive = 30,
             Pooling = true
         };
 
-        // Railway/Heroku/cloud Postgres requires SSL; local Docker/dev often does not.
         if (RequiresSsl(builder.Host))
             builder.SslMode = SslMode.Require;
         else
             builder.SslMode = SslMode.Prefer;
 
-        return builder.ConnectionString;
+        var result = builder.ConnectionString;
+
+        // Railway public proxy (*.rlwy.net) — matches appsettings.Production.example.json guidance.
+        if (IsRailwayProxyHost(builder.Host)
+            && !result.Contains("Trust Server Certificate", StringComparison.OrdinalIgnoreCase))
+        {
+            result += ";Trust Server Certificate=true";
+        }
+
+        return result;
+    }
+
+    private static bool IsRailwayProxyHost(string? host)
+    {
+        if (string.IsNullOrWhiteSpace(host))
+            return false;
+
+        var normalized = host.Trim().ToLowerInvariant();
+        return normalized.EndsWith(".rlwy.net", StringComparison.Ordinal)
+            || normalized.Contains("proxy.rlwy.net", StringComparison.Ordinal);
     }
 
     private static bool RequiresSsl(string? host)
