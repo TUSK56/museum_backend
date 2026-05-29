@@ -1,0 +1,6 @@
+[_]
+schema-version = "0.2"
+
+# Heroku's dotnet publish does not support .slnx on Linux SDK 8.x; use classic .sln.
+[com.heroku.buildpacks.dotnet]
+solution_file = "VirtualMuseum.sln"
