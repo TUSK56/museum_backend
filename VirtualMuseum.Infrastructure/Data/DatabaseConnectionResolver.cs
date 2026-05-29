@@ -73,17 +73,35 @@ public static class DatabaseConnectionResolver
         return Normalize(builder.ConnectionString);
     }
 
+    public static bool IsHeroku =>
+        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DYNO"));
+
+    public static bool IsLocalHost(string connectionString)
+    {
+        try
+        {
+            var host = new NpgsqlConnectionStringBuilder(connectionString).Host?.Trim().ToLowerInvariant();
+            return host is "localhost" or "127.0.0.1" or "::1";
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private static string Normalize(string connectionString)
     {
+        var source = new NpgsqlConnectionStringBuilder(connectionString);
         var builder = new NpgsqlConnectionStringBuilder(connectionString)
         {
-            Timeout = 60,
+            // Shorter timeout on cloud so a missing/wrong DB fails before Heroku's boot limit.
+            Timeout = RequiresSsl(source.Host) ? 15 : 60,
             CommandTimeout = 120,
             KeepAlive = 30,
             Pooling = true
         };
 
-        // Railway/cloud Postgres requires SSL; local Docker/dev often does not.
+        // Railway/Heroku/cloud Postgres requires SSL; local Docker/dev often does not.
         if (RequiresSsl(builder.Host))
             builder.SslMode = SslMode.Require;
         else

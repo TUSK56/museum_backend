@@ -285,6 +285,34 @@ VirtualMuseum Back-End/
 
 ---
 
+## Deploy on Heroku
+
+1. Attach PostgreSQL (sets `DATABASE_URL` automatically):
+
+   ```bash
+   heroku addons:create heroku-postgresql:essential-0 -a YOUR_APP_NAME
+   ```
+
+2. Or point at external Postgres (e.g. Railway):
+
+   ```bash
+   heroku config:set ConnectionStrings__DefaultConnection="Host=...;Port=...;Database=...;Username=...;Password=...;SSL Mode=Require;Trust Server Certificate=true" -a YOUR_APP_NAME
+   ```
+
+3. Optional JWT override:
+
+   ```bash
+   heroku config:set Jwt__Key="your-secret-at-least-32-characters-long" -a YOUR_APP_NAME
+   ```
+
+4. Deploy from this repo root (`museum_backend`). The repo includes `VirtualMuseum.sln`, `project.toml`, and `Procfile` for the Heroku .NET buildpack.
+
+5. Open Swagger: `https://YOUR_APP.herokuapp.com/swagger`
+
+If the dyno crashes with **H10**, run `heroku logs --tail` — the most common cause is no `DATABASE_URL` (app still using localhost from `appsettings.json`).
+
+---
+
 ## Troubleshooting
 
 - **403 on POST/PUT/DELETE museum routes:** JWT must be for a user with role **Admin**.  

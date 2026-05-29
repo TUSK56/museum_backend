@@ -24,6 +24,12 @@ if (!string.IsNullOrWhiteSpace(port))
 
 // Database - Scoped lifetime (default for AddDbContext)
 var connectionString = DatabaseConnectionResolver.Resolve(builder.Configuration);
+if (DatabaseConnectionResolver.IsHeroku && DatabaseConnectionResolver.IsLocalHost(connectionString))
+{
+    throw new InvalidOperationException(
+        "Heroku: no cloud database configured. Add Heroku Postgres (heroku addons:create heroku-postgresql:essential-0) " +
+        "or set DATABASE_URL / ConnectionStrings__DefaultConnection to your PostgreSQL instance.");
+}
 
 builder.Services.AddDbContext<MuseumDbContext>(options =>
 {
@@ -116,7 +122,17 @@ builder.Services.AddCors(options =>
             throw new InvalidOperationException("Cors:Origins must be configured in non-development environments.");
         }
 
-        policy.WithOrigins(corsOrigins).AllowAnyHeader().AllowAnyMethod();
+        policy
+            .SetIsOriginAllowed(origin =>
+            {
+                if (corsOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase))
+                    return true;
+
+                return Uri.TryCreate(origin, UriKind.Absolute, out var uri)
+                    && uri.Host.EndsWith(".herokuapp.com", StringComparison.OrdinalIgnoreCase);
+            })
+            .AllowAnyHeader()
+            .AllowAnyMethod();
     });
 });
 
@@ -183,7 +199,8 @@ if (runMigrationsOnStartup)
         runMigrationsOnStartup);
     try
     {
-        const int maxRetries = 12;
+        // Heroku kills the dyno if boot takes too long; avoid long retry loops without a database.
+        var maxRetries = DatabaseConnectionResolver.IsHeroku ? 3 : 12;
         for (var attempt = 1; attempt <= maxRetries; attempt++)
         {
             try
