@@ -77,14 +77,28 @@ public static class DatabaseConnectionResolver
     {
         var builder = new NpgsqlConnectionStringBuilder(connectionString)
         {
-            SslMode = SslMode.Require,
-            TrustServerCertificate = true,
             Timeout = 60,
             CommandTimeout = 120,
             KeepAlive = 30,
             Pooling = true
         };
 
+        // Railway/cloud Postgres requires SSL; local Docker/dev often does not.
+        if (RequiresSsl(builder.Host))
+            builder.SslMode = SslMode.Require;
+        else
+            builder.SslMode = SslMode.Prefer;
+
         return builder.ConnectionString;
+    }
+
+    private static bool RequiresSsl(string? host)
+    {
+        if (string.IsNullOrWhiteSpace(host))
+            return false;
+
+        var normalized = host.Trim().ToLowerInvariant();
+        return normalized is not ("localhost" or "127.0.0.1" or "::1")
+            && !normalized.EndsWith(".local", StringComparison.Ordinal);
     }
 }
