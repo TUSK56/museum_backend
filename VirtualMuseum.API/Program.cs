@@ -38,15 +38,6 @@ if (DatabaseConnectionResolver.IsHeroku && DatabaseConnectionResolver.IsRailwayI
         "Set DATABASE_URL to DATABASE_PUBLIC_URL from Railway (host ends with .proxy.rlwy.net).");
 }
 
-builder.Services.AddDbContext<MuseumDbContext>(options =>
-{
-    options.UseNpgsql(connectionString, npgsql =>
-    {
-        npgsql.EnableRetryOnFailure(5, TimeSpan.FromSeconds(5), null);
-        npgsql.MigrationsAssembly(typeof(MuseumDbContext).Assembly.FullName);
-    });
-});
-
 var dataProtectionKeyPath = builder.Configuration["DataProtection:KeyPath"];
 if (string.IsNullOrWhiteSpace(dataProtectionKeyPath))
 {
@@ -112,6 +103,17 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddAuthorization();
+builder.Services.AddResponseCompression(options => options.EnableForHttps = true);
+
+// Heroku Eco/Basic dynos have 512MB RAM; cap EF pool to reduce memory spikes.
+builder.Services.AddDbContextPool<MuseumDbContext>(options =>
+{
+    options.UseNpgsql(connectionString, npgsql =>
+    {
+        npgsql.EnableRetryOnFailure(5, TimeSpan.FromSeconds(5), null);
+        npgsql.MigrationsAssembly(typeof(MuseumDbContext).Assembly.FullName);
+    });
+}, poolSize: DatabaseConnectionResolver.IsHeroku ? 8 : 32);
 
 var corsOrigins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? Array.Empty<string>();
 builder.Services.AddCors(options =>
@@ -190,7 +192,7 @@ var app = builder.Build();
 app.Logger.LogInformation("PostgreSQL target: {DatabaseHost}", DatabaseConnectionResolver.DescribeHost(connectionString));
 var enableSwagger =
     builder.Configuration.GetValue<bool?>("Swagger:Enabled")
-    ?? true;
+    ?? !DatabaseConnectionResolver.IsHeroku;
 
 app.UseForwardedHeaders(new ForwardedHeadersOptions
 {
@@ -283,6 +285,7 @@ if (!behindProxy)
 {
     app.UseHttpsRedirection();
 }
+app.UseResponseCompression();
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
