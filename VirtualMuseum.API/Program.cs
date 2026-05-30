@@ -135,8 +135,20 @@ builder.Services.AddCors(options =>
                 if (corsOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase))
                     return true;
 
-                return Uri.TryCreate(origin, UriKind.Absolute, out var uri)
-                    && uri.Host.EndsWith(".herokuapp.com", StringComparison.OrdinalIgnoreCase);
+                if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri))
+                    return false;
+
+                if (uri.Host.EndsWith(".herokuapp.com", StringComparison.OrdinalIgnoreCase))
+                    return true;
+
+                if (uri.Host.EndsWith(".netlify.app", StringComparison.OrdinalIgnoreCase))
+                    return true;
+
+                if (uri.Host.Equals("egyptianmuseum.me", StringComparison.OrdinalIgnoreCase)
+                    || uri.Host.Equals("www.egyptianmuseum.me", StringComparison.OrdinalIgnoreCase))
+                    return true;
+
+                return false;
             })
             .AllowAnyHeader()
             .AllowAnyMethod();
@@ -226,6 +238,12 @@ if (runMigrationsOnStartup)
             catch (Exception ex)
             {
                 startupLogger.LogError(ex, "Database migration failed after {MaxRetries} attempts.", maxRetries);
+                if (DatabaseConnectionResolver.IsHeroku)
+                {
+                    startupLogger.LogWarning(
+                        "Heroku: continuing startup without migrations so /health and API can respond. Fix DATABASE_URL.");
+                    break;
+                }
                 throw new InvalidOperationException("Unable to initialize database. See logs for details.", ex);
             }
         }
@@ -233,7 +251,8 @@ if (runMigrationsOnStartup)
     catch (Exception ex)
     {
         startupLogger.LogError(ex, "Database initialization failed: {Message}. Set ConnectionStrings__DefaultConnection or DATABASE_URL (Railway).", ex.Message);
-        throw;
+        if (!DatabaseConnectionResolver.IsHeroku)
+            throw;
     }
 }
 else
