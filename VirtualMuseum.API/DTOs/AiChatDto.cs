@@ -19,4 +19,4 @@ public sealed class AiChatRequest
     public string? ImageMimeType { get; set; }
 }
 
-public sealed record AiChatResponse(string Reply, bool FromN8n = true);
+public sealed record AiChatResponse(string Reply, string SessionId, bool FromN8n = true);

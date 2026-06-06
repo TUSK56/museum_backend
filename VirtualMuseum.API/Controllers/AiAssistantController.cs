@@ -44,6 +44,10 @@ public class AiAssistantController : ControllerBase
         if (string.IsNullOrWhiteSpace(message) && string.IsNullOrWhiteSpace(request.ImageBase64))
             return BadRequest(new ApiResponse(false, "Message or image is required"));
 
+        var sessionId = string.IsNullOrWhiteSpace(request.SessionId)
+            ? User.FindFirstValue(ClaimTypes.NameIdentifier) ?? Guid.NewGuid().ToString("N")
+            : request.SessionId.Trim();
+
         var webhookUrl = _configuration["N8n:WebhookUrl"]?.Trim();
         if (string.IsNullOrWhiteSpace(webhookUrl))
         {
@@ -51,19 +55,17 @@ public class AiAssistantController : ControllerBase
                 true,
                 new AiChatResponse(
                     "The AI assistant is not connected yet. Add your n8n Webhook URL to N8n:WebhookUrl in server appsettings, then restart the API.",
+                    sessionId,
                     false),
                 "n8n webhook is not configured"));
         }
-
-        var sessionId = string.IsNullOrWhiteSpace(request.SessionId)
-            ? User.FindFirstValue(ClaimTypes.NameIdentifier) ?? Guid.NewGuid().ToString("N")
-            : request.SessionId.Trim();
 
         var outbound = new
         {
             message,
             chatInput = message,
             sessionId,
+            session_id = sessionId,
             imageBase64 = request.ImageBase64,
             imageMimeType = request.ImageMimeType ?? "image/jpeg",
             userId = User.FindFirstValue(ClaimTypes.NameIdentifier),
@@ -91,22 +93,25 @@ public class AiAssistantController : ControllerBase
                 var hint = BuildN8nErrorHint((int)response.StatusCode, raw);
                 return Ok(new ApiResponse<AiChatResponse>(
                     true,
-                    new AiChatResponse(hint, false),
+                    new AiChatResponse(hint, sessionId, false),
                     "n8n request failed"));
             }
 
             var reply = ExtractReply(raw);
+            var resolvedSessionId = ExtractSessionId(raw) ?? sessionId;
             if (string.IsNullOrWhiteSpace(reply))
-                reply = "I received your message but could not parse a reply from the workflow. Check your n8n Respond to Webhook node returns { \"reply\": \"...\" }.";
+                reply = "I received your message but could not parse a reply from the workflow. Check your n8n Respond to Webhook node returns { \"reply\": \"...\" } or { \"output\": \"...\" }.";
 
-            return Ok(new ApiResponse<AiChatResponse>(true, new AiChatResponse(reply.Trim(), true)));
+            return Ok(new ApiResponse<AiChatResponse>(
+                true,
+                new AiChatResponse(reply.Trim(), resolvedSessionId, true)));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to call n8n webhook");
             return Ok(new ApiResponse<AiChatResponse>(
                 true,
-                new AiChatResponse("Could not reach the AI workflow. Verify N8n:WebhookUrl and that n8n is online.", false),
+                new AiChatResponse("Could not reach the AI workflow. Verify N8n:WebhookUrl and that n8n is online.", sessionId, false),
                 "n8n call failed"));
         }
     }
@@ -122,6 +127,47 @@ public class AiAssistantController : ControllerBase
             return "n8n webhook URL was not found. Check N8n:WebhookUrl matches the Production URL from your Webhook node.";
 
         return "The AI service is temporarily unavailable. Please try again shortly.";
+    }
+
+    private static string? ExtractSessionId(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw) || (!raw.TrimStart().StartsWith('{') && !raw.TrimStart().StartsWith('[')))
+            return null;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(raw);
+            return FindSessionId(doc.RootElement);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string? FindSessionId(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var key in new[] { "sessionId", "session_id" })
+            {
+                if (element.TryGetProperty(key, out var prop) && prop.ValueKind == JsonValueKind.String)
+                {
+                    var value = prop.GetString()?.Trim();
+                    if (!string.IsNullOrWhiteSpace(value))
+                        return value;
+                }
+            }
+
+            if (element.TryGetProperty("json", out var jsonProp))
+            {
+                var nested = FindSessionId(jsonProp);
+                if (!string.IsNullOrWhiteSpace(nested))
+                    return nested;
+            }
+        }
+
+        return null;
     }
 
     private static string? ExtractReply(string raw)
