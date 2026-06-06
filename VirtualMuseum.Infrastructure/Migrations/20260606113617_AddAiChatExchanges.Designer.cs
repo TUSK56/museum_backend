@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using VirtualMuseum.Infrastructure.Data;
@@ -11,9 +12,11 @@ using VirtualMuseum.Infrastructure.Data;
 namespace VirtualMuseum.Infrastructure.Migrations
 {
     [DbContext(typeof(MuseumDbContext))]
-    partial class MuseumDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260606113617_AddAiChatExchanges")]
+    partial class AddAiChatExchanges
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
