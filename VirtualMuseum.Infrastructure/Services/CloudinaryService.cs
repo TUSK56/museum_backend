@@ -1,6 +1,5 @@
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
+using CloudinaryDotNet;
+using CloudinaryDotNet.Actions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using VirtualMuseum.Application.Interfaces;
@@ -28,9 +27,15 @@ public class CloudinaryService : ICloudinaryService
             if (!string.Equals(storage, "cloudinary", StringComparison.OrdinalIgnoreCase))
                 return false;
 
-            return !string.IsNullOrWhiteSpace(CloudName)
-                   && !string.IsNullOrWhiteSpace(ApiKey)
-                   && !string.IsNullOrWhiteSpace(ApiSecret);
+            if (string.IsNullOrWhiteSpace(CloudName))
+                return false;
+
+            // Signed upload path
+            if (!string.IsNullOrWhiteSpace(ApiKey) && !string.IsNullOrWhiteSpace(ApiSecret))
+                return true;
+
+            // Unsigned upload path (requires preset in Cloudinary dashboard)
+            return !string.IsNullOrWhiteSpace(UploadPreset);
         }
     }
 
@@ -38,6 +43,8 @@ public class CloudinaryService : ICloudinaryService
     private string? ApiKey => ResolveConfig("Cloudinary:ApiKey", "CLOUDINARY_API_KEY");
     private string? ApiSecret => ResolveConfig("Cloudinary:ApiSecret", "CLOUDINARY_API_SECRET");
     private string Folder => ResolveConfig("Cloudinary:Folder", "CLOUDINARY_FOLDER") ?? "egy";
+    private string? UploadPreset =>
+        ResolveConfig("Cloudinary:UploadPreset", "CLOUDINARY_UPLOAD_PRESET");
 
     public async Task<string?> UploadImageAsync(
         Stream stream,
@@ -51,46 +58,53 @@ public class CloudinaryService : ICloudinaryService
             return null;
         }
 
-        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
-        var signaturePayload = $"folder={Folder}&timestamp={timestamp}{ApiSecret}";
-        var signature = ComputeSha1Hex(signaturePayload);
+        if (stream.CanSeek)
+            stream.Position = 0;
 
-        using var form = new MultipartFormDataContent();
-        var fileContent = new StreamContent(stream);
-        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(
-            string.IsNullOrWhiteSpace(contentType) ? "image/jpeg" : contentType);
-        form.Add(fileContent, "file", string.IsNullOrWhiteSpace(fileName) ? "upload.jpg" : fileName);
-        form.Add(new StringContent(ApiKey!), "api_key");
-        form.Add(new StringContent(timestamp), "timestamp");
-        form.Add(new StringContent(signature), "signature");
-        form.Add(new StringContent(Folder), "folder");
-
-        var url = $"https://api.cloudinary.com/v1_1/{CloudName}/image/upload";
-
-        using var client = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
-        using var response = await client.PostAsync(url, form, cancellationToken);
-        var raw = await response.Content.ReadAsStringAsync(cancellationToken);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            _logger.LogWarning("Cloudinary upload failed ({Status}): {Body}", (int)response.StatusCode, raw);
-            return null;
-        }
+        var safeName = string.IsNullOrWhiteSpace(fileName) ? "upload.jpg" : fileName;
 
         try
         {
-            using var doc = JsonDocument.Parse(raw);
-            if (doc.RootElement.TryGetProperty("secure_url", out var secureUrl))
-                return secureUrl.GetString();
-            if (doc.RootElement.TryGetProperty("url", out var plainUrl))
-                return plainUrl.GetString();
+            var uploadParams = new ImageUploadParams
+            {
+                File = new FileDescription(safeName, stream),
+                Folder = Folder,
+                Overwrite = false,
+                UniqueFilename = true,
+            };
+
+            ImageUploadResult result;
+
+            if (!string.IsNullOrWhiteSpace(ApiKey) && !string.IsNullOrWhiteSpace(ApiSecret))
+            {
+                var account = new Account(CloudName, ApiKey, ApiSecret);
+                var cloudinary = new Cloudinary(account);
+                result = await cloudinary.UploadAsync(uploadParams, cancellationToken);
+            }
+            else
+            {
+                uploadParams.UploadPreset = UploadPreset;
+                var cloudinary = new Cloudinary(CloudName);
+                result = await cloudinary.UploadAsync(uploadParams, cancellationToken);
+            }
+
+            if (result.Error != null)
+            {
+                _logger.LogWarning(
+                    "Cloudinary upload failed: {Message}",
+                    result.Error.Message);
+                return null;
+            }
+
+            return string.IsNullOrWhiteSpace(result.SecureUrl?.ToString())
+                ? result.Url?.ToString()
+                : result.SecureUrl.ToString();
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to parse Cloudinary response.");
+            _logger.LogWarning(ex, "Cloudinary upload threw an exception.");
+            return null;
         }
-
-        return null;
     }
 
     private string? ResolveConfig(string primaryKey, string envStyleKey)
@@ -101,11 +115,5 @@ public class CloudinaryService : ICloudinaryService
 
         value = _configuration[envStyleKey];
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-    }
-
-    private static string ComputeSha1Hex(string input)
-    {
-        var hash = SHA1.HashData(Encoding.UTF8.GetBytes(input));
-        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 }
