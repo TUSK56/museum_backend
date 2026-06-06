@@ -117,13 +117,6 @@ public class AuthController : ControllerBase
         if (request == null)
             return BadRequest(new ApiResponse(false, "Invalid request body"));
 
-        var smtpEnabled = bool.TryParse(_configuration.GetSection("Smtp")["Enabled"], out var enabled) && enabled;
-        if (!smtpEnabled && !_environment.IsDevelopment())
-        {
-            return StatusCode(StatusCodes.Status503ServiceUnavailable,
-                new ApiResponse(false, "Email delivery is not configured. Please enable SMTP on the server to receive OTP emails."));
-        }
-
         var code = await _authService.SendOtpAsync(request.Email, cancellationToken);
         if (code == null)
             return BadRequest(new ApiResponse(false, "Invalid email"));

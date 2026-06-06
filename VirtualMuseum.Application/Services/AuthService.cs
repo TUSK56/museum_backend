@@ -149,7 +149,14 @@ public class AuthService : IAuthService
         }
 
         var body = $"Your verification code is: {code}{Environment.NewLine}This code will expire in 5 minutes.";
-        await _emailService.SendEmailAsync(email, "Email Verification", body, cancellationToken);
+        try
+        {
+            await _emailService.SendEmailAsync(email, "Email Verification", body, cancellationToken);
+        }
+        catch
+        {
+            // OTP is stored; user can resend once SMTP is fixed.
+        }
 
         return new RegisterResult(Guid.Empty, email, fullName, region, true);
     }
@@ -171,7 +178,14 @@ public class AuthService : IAuthService
             await _pendingUserRegistrationRepository.UpdateAsync(pending, cancellationToken);
 
             var pendingBody = $"Your verification code is: {pendingCode}{Environment.NewLine}This code will expire in 5 minutes.";
-            await _emailService.SendEmailAsync(normalizedEmail, "Email Verification", pendingBody, cancellationToken);
+            try
+            {
+                await _emailService.SendEmailAsync(normalizedEmail, "Email Verification", pendingBody, cancellationToken);
+            }
+            catch
+            {
+                // OTP stored; resend can retry delivery.
+            }
             return pendingCode;
         }
 
@@ -193,7 +207,14 @@ public class AuthService : IAuthService
         await _otpRepository.SaveChangesAsync(cancellationToken);
 
         var body = $"Your verification code is: {code}{Environment.NewLine}This code will expire in 5 minutes.";
-        await _emailService.SendEmailAsync(normalizedEmail, "Email Verification", body, cancellationToken);
+        try
+        {
+            await _emailService.SendEmailAsync(normalizedEmail, "Email Verification", body, cancellationToken);
+        }
+        catch
+        {
+            // OTP stored; resend can retry delivery.
+        }
         return code;
     }
 
