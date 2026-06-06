@@ -70,6 +70,7 @@ builder.Services.AddScoped<CategoryService>();
 builder.Services.AddScoped<MaterialService>();
 builder.Services.AddScoped<TagService>();
 builder.Services.AddScoped<UserService>();
+builder.Services.AddScoped<ICloudinaryService, CloudinaryService>();
 
 builder.Services.AddHttpClient("N8n", client =>
 {

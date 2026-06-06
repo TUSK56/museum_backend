@@ -27,6 +27,9 @@ public class MuseumDbContext : DbContext
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
     public DbSet<ChatMessageArtifact> ChatMessageArtifacts => Set<ChatMessageArtifact>();
     public DbSet<AiChatExchange> AiChatExchanges => Set<AiChatExchange>();
+    public DbSet<CommunityPost> CommunityPosts => Set<CommunityPost>();
+    public DbSet<CommunityComment> CommunityComments => Set<CommunityComment>();
+    public DbSet<CommunityReaction> CommunityReactions => Set<CommunityReaction>();
     public DbSet<Favorite> Favorites => Set<Favorite>();
     public DbSet<Review> Reviews => Set<Review>();
     public DbSet<ArtifactView> ArtifactViews => Set<ArtifactView>();
